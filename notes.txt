@@ -1,0 +1,15 @@
+# dont forget to activate environment
+conda activate mucus
+
+# navigate to 
+cd /local_scratch/janmak98/rust_mucus
+
+# build package
+maturin build
+
+# install
+pip install .
+
+# one liners
+conda activate mucus; maturin build; pip install .
+maturin build; pip install .
