@@ -673,9 +673,9 @@ fn get_forces_cell_linked_test(
     use_force_bonded:       bool,
     use_force_lj:           bool,
     use_force_deb:          bool,
-    neighbour_cells_idx:    &PyArray2<i16>,     // contains the index list of the skin cells of shape (n_skin_cells, 3)
-    head_array:             &PyArray3<i16>,     // head array of shape (n_cells,n_cells,n_cells)
-    list_array:             &PyArray1<i16>,     // list array of shape (n_particles)
+    neighbour_cells_idx:    &PyArray2<isize>,     // contains the index list of the skin cells of shape (n_skin_cells, 3)
+    head_array:             &PyArray3<isize>,     // head array of shape (n_cells,n_cells,n_cells)
+    list_array:             &PyArray1<isize>,     // list array of shape (n_particles)
     n_cells:                usize,              // number of cells in each dimension
     n_neighbour_cells:      usize,              // number of neighbor cells
     ) {
@@ -705,8 +705,8 @@ fn get_forces_cell_linked_test(
     let mut dist:       f64;                     // distance
     let mut force:      f64;                     // force acting on particle i resulting from the interaction with particle j
     let mut bonded:     bool;                    // boolean to check if particles are bonded
-    let mut head_idx:   i16;                     // index of head particle of current cell
-    let mut cell_idx:   i16;                     // index of head particle of neighboring cell
+    let mut head_idx:   isize;                     // index of head particle of current cell
+    let mut cell_idx:   isize;                     // index of head particle of neighboring cell
     let mut i:          usize;                   // index of particle i
     let mut j:          usize;                   // index of particle j
     let mut cell_i:     usize;                   // index i of neighboring cell
@@ -726,9 +726,9 @@ fn get_forces_cell_linked_test(
             // loop over all neighboring cells
             for n in 0..n_neighbour_cells {
                 // rem_euclid is is the modulo function and is used to make the cells periodic
-                cell_i = ((head_i as i16 + neighbour_cells_idx[[n, 0]])).rem_euclid(n_cells as i16) as usize;
-                cell_j = ((head_j as i16 + neighbour_cells_idx[[n, 1]])).rem_euclid(n_cells as i16) as usize;
-                cell_k = ((head_k as i16 + neighbour_cells_idx[[n, 2]])).rem_euclid(n_cells as i16) as usize;
+                cell_i = ((head_i as isize + neighbour_cells_idx[[n, 0]])).rem_euclid(n_cells as isize) as usize;
+                cell_j = ((head_j as isize + neighbour_cells_idx[[n, 1]])).rem_euclid(n_cells as isize) as usize;
+                cell_k = ((head_k as isize + neighbour_cells_idx[[n, 2]])).rem_euclid(n_cells as isize) as usize;
 
                 // get the index of the head particle of the neighboring (or same) cell
                 cell_idx = head_array[[cell_i, cell_j, cell_k]];
@@ -829,6 +829,54 @@ fn get_forces_cell_linked_test(
     }                
 }
 
+/// Updates the list and head arrays based on positions and cell_length
+#[pyfunction]
+fn update_linked_list(
+    list_array:             &PyArray1<isize>,
+    head_array:             &PyArray3<isize>,
+    positions:              &PyArray2<f64>, 
+    cell_length:            f64,
+    ) {
+
+    // load arrays 
+    
+    
+    let mut list = unsafe { list_array.as_array_mut() };
+    let mut head = unsafe { head_array.as_array_mut() };
+    let pos      = unsafe { positions.as_array() };
+
+    // Reset arrays to -1
+    list.fill(-1);
+    head.fill(-1);
+
+    // Compute cell_index
+    let shape = head.shape();
+    let mut cell_index = Vec::with_capacity(pos.nrows());
+
+    for row in pos.outer_iter() {
+        let idx: Vec<usize> = row.iter()
+            .map(|&v| ((v / cell_length).floor() as isize).max(0) as usize)
+            .collect();
+
+        // Clamp to valid bounds
+        let x = idx[0].min(shape[0] - 1);
+        let y = idx[1].min(shape[1] - 1);
+        let z = idx[2].min(shape[2] - 1);
+
+        cell_index.push([x, y, z]);
+    }
+
+    // Update linked list
+    for (i, cell) in cell_index.iter().enumerate() {
+        let x = cell[0];
+        let y = cell[1];
+        let z = cell[2];
+
+        list[i] = head[[x, y, z]];
+        head[[x, y, z]] = i as isize;
+    }
+}
+
 /// A Python module implemented in Rust.
 #[pymodule]
 fn rust_mucus(_py: Python, m: &PyModule) -> PyResult<()> {
@@ -839,5 +887,6 @@ fn rust_mucus(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(get_forces, m)?)?;
     m.add_function(wrap_pyfunction!(get_forces_cell_linked, m)?)?;
     m.add_function(wrap_pyfunction!(get_forces_cell_linked_test, m)?)?;
+    m.add_function(wrap_pyfunction!(update_linked_list, m)?)?;
     Ok(())
 }
