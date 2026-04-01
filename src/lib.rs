@@ -1047,7 +1047,9 @@ fn get_forces_cell_linked_virial(
     let mut cell_i:     usize;                   // index i of neighboring cell
     let mut cell_j:     usize;                   // index j of neighboring cell
     let mut cell_k:     usize;                   // index k of neighboring cell
-
+    
+    let mut tmp_sigma: f64;
+    
     // loop over all cells
     for head_i in 0..n_cells {
     for head_j in 0..n_cells {
@@ -1135,9 +1137,14 @@ fn get_forces_cell_linked_virial(
                                 
                                 // WCA is a non-bonded force    
                                 if use_force_lj {
+
+                                    tmp_sigma = sigmas_lj[tag_pair];
+                                    
+                                    if dist < ((2_f64).powf(1.0/6.0))*tmp_sigma { // enforce the force cutoff of the wca potential
                                     // get lennard jones force
                                     //WRONG: force += 4.0*epsilons_lj[tag_pair]*(-12.0*sigmas_lj[tag_pair].powi(12)/dist.powi(14) + 6.0*sigmas_lj[tag_pair].powi(7)/dist.powi(8));
-                                    force += -24.0*epsilons_lj[tag_pair]*(2.0*sigmas_lj[tag_pair].powi(12)/dist.powi(14) - sigmas_lj[tag_pair].powi(6)/dist.powi(8));
+                                        force += -24.0*epsilons_lj[tag_pair]*(2.0*tmp_sigma.powi(12)/dist.powi(14) - tmp_sigma.powi(6)/dist.powi(8));
+                                    }
                                 }
                             }
                             
@@ -1146,7 +1153,7 @@ fn get_forces_cell_linked_virial(
                                 force += -charges[tag_pair.0]*charges[tag_pair.1]*lB_debye*(1.0+B_debye*dist)*(-B_debye*dist).exp()/dist.powi(3);
                             }
                         }
-                
+                        
                         for d in 0..n_dim {
                             // dir does not need to be normalized because it happens in force calculation
                             force_total[[i, d]] += force * dir[d];
