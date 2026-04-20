@@ -304,47 +304,49 @@ fn get_forces_cell_linked_virial(
     // Chill code using the numpy crate functions for numpy functionality
     let wca_cutoff = &sigmas_lj * (2.0_f64.powf(1.0/6.0));
     
-    // lets compute the bonded interactions before in a simple way such that there is no chance for those to accidentally get cut off
-    for part_idx_i in 0..bond_list.len(){
-        // the bond partners of particle i are contained in the list bond_list[part_idx_i]
-        for b_table_idx_j in 0..bond_list[part_idx_i].len(){
-            j = bond_list[part_idx_i][b_table_idx_j];
-            // check for the index to not double compute things and so on.
-            if part_idx_i < j {
-                // reset variables
-                dist2 = 0.0;
-                tag_pair.0 = tags[part_idx_i];
-                tag_pair.1 = tags[j];
+    if use_force_bonded{
+        // lets compute the bonded interactions before in a simple way such that there is no chance for those to accidentally get cut off
+        for part_idx_i in 0..bond_list.len(){
+            // the bond partners of particle i are contained in the list bond_list[part_idx_i]
+            for b_table_idx_j in 0..bond_list[part_idx_i].len(){
+                j = bond_list[part_idx_i][b_table_idx_j];
+                // check for the index to not double compute things and so on.
+                if part_idx_i < j {
+                    // reset variables
+                    dist2 = 0.0;
+                    tag_pair.0 = tags[part_idx_i];
+                    tag_pair.1 = tags[j];
 
-                // get distance vector
-                for d in 0..n_dim {
-                    dir[d] = positions[[j, d]] - positions[[part_idx_i, d]];
-                    dir[d] -= l_box * (dir[d] / l_box).round();
-        
-                    // get squared distance
-                    dist2 += dir[d].powi(2);
-                }
-                
-                // calculate distance
-                dist = dist2.sqrt();
-                // get bondforce
-                force = 2.0*force_constants[tag_pair] * (1.0 - bond_lengths[tag_pair]/dist);
+                    // get distance vector
+                    for d in 0..n_dim {
+                        dir[d] = positions[[j, d]] - positions[[part_idx_i, d]];
+                        dir[d] -= l_box * (dir[d] / l_box).round();
             
-                for d in 0..n_dim {
-                    // dir does not need to be normalized because it happens in force calculation
-                    force_total[[part_idx_i, d]] += force * dir[d];
-                    force_total[[j, d]] -= force * dir[d];
-                }
+                        // get squared distance
+                        dist2 += dir[d].powi(2);
+                    }
+                    
+                    // calculate distance
+                    dist = dist2.sqrt();
+                    // get bondforce
+                    force = 2.0*force_constants[tag_pair] * (1.0 - bond_lengths[tag_pair]/dist);
+                
+                    for d in 0..n_dim {
+                        // dir does not need to be normalized because it happens in force calculation
+                        force_total[[part_idx_i, d]] += force * dir[d];
+                        force_total[[j, d]] -= force * dir[d];
+                    }
 
-                if calc_virial {
+                    if calc_virial {
 
-                    for a in 0..n_dim {
-                        for b in 0..n_dim {
-                            virial[[a, b]] += force * dir[b] * dir[a];
+                        for a in 0..n_dim {
+                            for b in 0..n_dim {
+                                virial[[a, b]] += force * dir[b] * dir[a];
+                            }
                         }
                     }
-                }
 
+                }
             }
         }
     }
@@ -397,7 +399,7 @@ fn get_forces_cell_linked_virial(
                         //      [],
                         //      [3, 5],
                         //  ]
-                        bonded = bond_list[i].contains(&j);
+                        bonded = bond_list[i].contains(&j) && use_force_bonded;
                         // bonded = bond_list[i].contains(&j);
                         // let bonded_to_i: Vec<usize> = {bond_list.get_item(i)}.extract();
                         // bonded = bonded_to_i.contains(&j);
